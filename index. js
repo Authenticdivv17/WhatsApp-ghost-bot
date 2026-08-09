@@ -1,0 +1,50 @@
+const { default: makeWASocket, DisconnectReason, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const pino = require('pino');
+const qrcode = require('qrcode-terminal');
+
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('auth_info');
+
+    const sock = makeWASocket({
+        logger: pino({ level: 'silent' }),
+        auth: state,
+        printQRInTerminal: true,
+        markOnlineOnConnect: true // Make am dey "online" for backend
+    });
+
+    sock.ev.on('creds.update', saveCreds);
+
+    sock.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect, qr } = update;
+        if (qr) qrcode.generate(qr, { small: true });
+
+        if (connection === 'open') console.log('Bot don connect! Monitoring messages... ✅');
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect.error?.output?.statusCode!== DisconnectReason.loggedOut;
+            if (shouldReconnect) startBot();
+        }
+    });
+
+    sock.ev.on('messages.upsert', async (m) => {
+        const msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return;
+
+        const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '[Image/Video/Doc]';
+        const from = msg.key.remoteJid;
+        const sender = msg.key.participant || from;
+        const time = new Date().toLocaleString();
+
+        // WE NO DEY SEND REPLY. WE JUST LOG AM
+        console.log(`\n--- New Message ---`);
+        console.log(`From: ${sender}`);
+        console.log(`Time: ${time}`);
+        console.log(`Message: ${text}`);
+        console.log(`-------------------\n`);
+
+        // We intentionally NO dey call sock.readMessages()
+        // and NO dey call sock.sendMessage()
+        // So e go remain 2 grey ticks
+    });
+}
+
+startBot();
