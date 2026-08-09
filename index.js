@@ -1,5 +1,4 @@
 const { default: makeWASocket, DisconnectReason, useMultiFileAuthState } = require('@whiskeysockets/baileys');
-const { Boom } = require('@hapi/boom');
 
 const sessionDir = './session';
 
@@ -8,46 +7,39 @@ async function startBot() {
     
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true,
         logger: require('pino')({ level: 'info' }),
-        markMessagesAsRead: false // This makes it stay on 2 grey ticks
+        markMessagesAsRead: false,
+        printQRInTerminal: false // No QR
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    // Always stay online
+    // Request pairing code if not logged in
+    if (!sock.authState.creds.registered) {
+        const phoneNumber = '+2348139025363'; // PUT YOUR WHATSAPP NUMBER HERE WITH COUNTRY CODE
+        console.log('Requesting pairing code for:', phoneNumber);
+        setTimeout(async () => {
+            const code = await sock.requestPairingCode(phoneNumber);
+            console.log('YOUR PAIRING CODE: ', code); // Copy this 6-digit code
+        }, 3000);
+    }
+
     sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
-        
-        if (qr) {
-            console.log('QR Code received. Scan it with WhatsApp');
-        }
+        const { connection, lastDisconnect } = update;
         
         if (connection === 'open') {
             console.log('Bot connected successfully');
-            // Set presence to online always
             await sock.sendPresenceUpdate('available');
         } else if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Connection closed. Reconnecting:', shouldReconnect);
-            if (shouldReconnect) {
-                startBot();
-            }
+            if (shouldReconnect) startBot();
         }
     });
 
-    // Keep presence online every 30 seconds
+    // Keep online every 30 seconds
     setInterval(async () => {
-        if (sock.user) {
-            await sock.sendPresenceUpdate('available');
-        }
+        if (sock.user) await sock.sendPresenceUpdate('available');
     }, 30000);
-
-    // Receive messages but don't mark as read = 2 grey ticks
-    sock.ev.on('messages.upsert', async (m) => {
-        console.log('New message received but not read');
-        // We don't call sock.readMessages() so it stays 2 grey ticks
-    });
 }
 
 startBot();
