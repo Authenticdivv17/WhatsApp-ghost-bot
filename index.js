@@ -16,7 +16,7 @@ async function startBot() {
 
     // Request pairing code if not logged in
     if (!sock.authState.creds.registered) {
-        const phoneNumber = '+2348139025363'; // PUT YOUR WHATSAPP NUMBER HERE WITH COUNTRY CODE
+        const phoneNumber = '2348139025363'; // PUT YOUR WHATSAPP NUMBER HERE WITH COUNTRY CODE
         console.log('Requesting pairing code for:', phoneNumber);
         setTimeout(async () => {
             const code = await sock.requestPairingCode(phoneNumber);
