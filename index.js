@@ -1,8 +1,10 @@
 const { default: makeWASocket, DisconnectReason, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const fs = require('fs');
+const http = require('http'); // STEP 1: ADD THIS
 
-const sessionDir = '/tmp/session'; // STEP 1: CHANGE FROM ./session TO /tmp/session
+const sessionDir = '/tmp/session'; // Railway temp storage
 const phoneNumber = '2348139025363'; // YOUR NUMBER
+const PORT = process.env.PORT || 3000; // Railway gives port
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
@@ -11,10 +13,11 @@ async function startBot() {
         auth: state,
         logger: require('pino')({ level: 'silent' }),
         markMessagesAsRead: false, // GHOST: No blue ticks
-        printQRInTerminal: false
+        printQRInTerminal: false,
+        browser: ['Google Chrome', 'Ubuntu', '22.04'] // GHOST: Disguise as PC
     });
 
-    // STEP 2: ADD THIS - Force save every 10s so Railway no delete am
+    // STEP 2: Force save every 10s so Railway no delete am
     setInterval(() => {
         saveCreds()
     }, 10000)
@@ -44,16 +47,43 @@ async function startBot() {
         } else if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
             if (shouldReconnect) {
-                console.log('Reconnecting...');
-                setTimeout(startBot, 3000);
+                console.log('Reconnecting in 5s...');
+                setTimeout(startBot, 5000);
+            } else {
+                console.log('Logged out. Delete session and pair again.');
             }
         }
     });
 
-    // GHOST: Stay Online 24/7
+    // GHOST: Stay Online 24/7 - Presence
     setInterval(async () => {
         if (sock.user) await sock.sendPresenceUpdate('available');
     }, 30000);
+
+    // THE PING - This one dey tell WhatsApp "I dey alive"
+    setInterval(async () => {
+        try {
+            if (sock.user) {
+                await sock.query({
+                    tag: 'iq',
+                    attrs: {
+                        to: '@s.whatsapp.net',
+                        type: 'get',
+                        xmlns: 'w:ping'
+                    }
+                })
+            }
+        } catch(e) {}
+    }, 20000) // ping every 20 seconds
 }
 
 startBot();
+
+// STEP 3: ANTI-SLEEP SERVER - Put this outside startBot
+// This makes Railway think say app dey busy so e no go sleep
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot is alive ✅');
+}).listen(PORT, () => {
+    console.log(`✅ Anti-sleep server running on port ${PORT}`);
+});
