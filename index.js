@@ -1,10 +1,10 @@
 const { default: makeWASocket, DisconnectReason, useMultiFileAuthState } = require('@whiskeysockets/baileys');
-const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 
 const sessionDir = './session';
+const phoneNumber = '2348139025363'; // YOUR NUMBER
 
-// Railway Fix: Auto delete bad session on start
+// Railway Fix: Auto delete bad session
 if (fs.existsSync(sessionDir)) {
     fs.rmSync(sessionDir, { recursive: true, force: true });
     console.log('Old session deleted');
@@ -15,39 +15,39 @@ async function startBot() {
     
     const sock = makeWASocket({
         auth: state,
-        logger: require('pino')({ level: 'silent' }), // Less spam
-        markMessagesAsRead: false, // GHOST FEATURE 1: No blue ticks
-        printQRInTerminal: true
+        logger: require('pino')({ level: 'silent' }),
+        markMessagesAsRead: false, // GHOST: No blue ticks
+        printQRInTerminal: false
     });
+
+    // Request pairing code if not registered
+    if (!sock.authState.creds.registered) {
+        setTimeout(async () => {
+            const code = await sock.requestPairingCode(phoneNumber);
+            console.log('\n====================================');
+            console.log('YOUR PAIRING CODE:', code);
+            console.log('Go WhatsApp > Linked devices > Link with phone number');
+            console.log('====================================\n');
+        }, 3000);
+    }
 
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', async (update) => {
-        const { connection, qr, lastDisconnect } = update;
-        
-        if (qr) {
-            console.log('\n====================================');
-            console.log('SCAN THIS QR NOW - Expires in 60s');
-            console.log('====================================\n');
-            qrcode.generate(qr, { small: true });
-        }
-        
+        const { connection } = update;
         if (connection === 'open') {
             console.log('✅ SUCCESS! GHOST BOT CONNECTED');
-            await sock.sendPresenceUpdate('available'); // Set online
+            await sock.sendPresenceUpdate('available');
         } else if (connection === 'close') {
-            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Connection closed. Reconnecting...');
-            if (shouldReconnect) {
-                setTimeout(startBot, 3000);
-            }
+            console.log('Reconnecting...');
+            setTimeout(startBot, 3000);
         }
     });
 
-    // GHOST FEATURE 2: Stay Online 24/7
+    // GHOST: Stay Online 24/7
     setInterval(async () => {
         if (sock.user) await sock.sendPresenceUpdate('available');
-    }, 30000); // Every 30 seconds
+    }, 30000);
 }
 
 startBot();
