@@ -1,45 +1,53 @@
 const { default: makeWASocket, DisconnectReason, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const qrcode = require('qrcode-terminal');
+const fs = require('fs');
 
 const sessionDir = './session';
+
+// Railway Fix: Auto delete bad session on start
+if (fs.existsSync(sessionDir)) {
+    fs.rmSync(sessionDir, { recursive: true, force: true });
+    console.log('Old session deleted');
+}
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
     
     const sock = makeWASocket({
         auth: state,
-        logger: require('pino')({ level: 'info' }),
-        markMessagesAsRead: false,
-        printQRInTerminal: false // No QR
+        logger: require('pino')({ level: 'silent' }), // Less spam
+        markMessagesAsRead: false, // GHOST FEATURE 1: No blue ticks
+        printQRInTerminal: true
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    // Request pairing code if not logged in
-    if (!sock.authState.creds.registered) {
-        const phoneNumber = '2348139025363'; // PUT YOUR WHATSAPP NUMBER HERE WITH COUNTRY CODE
-        console.log('Requesting pairing code for:', phoneNumber);
-        setTimeout(async () => {
-            const code = await sock.requestPairingCode(phoneNumber);
-            console.log('YOUR PAIRING CODE: ', code); // Copy this 6-digit code
-        }, 3000);
-    }
-
     sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, qr, lastDisconnect } = update;
+        
+        if (qr) {
+            console.log('\n====================================');
+            console.log('SCAN THIS QR NOW - Expires in 60s');
+            console.log('====================================\n');
+            qrcode.generate(qr, { small: true });
+        }
         
         if (connection === 'open') {
-            console.log('Bot connected successfully');
-            await sock.sendPresenceUpdate('available');
+            console.log('✅ SUCCESS! GHOST BOT CONNECTED');
+            await sock.sendPresenceUpdate('available'); // Set online
         } else if (connection === 'close') {
             const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) startBot();
+            console.log('Connection closed. Reconnecting...');
+            if (shouldReconnect) {
+                setTimeout(startBot, 3000);
+            }
         }
     });
 
-    // Keep online every 30 seconds
+    // GHOST FEATURE 2: Stay Online 24/7
     setInterval(async () => {
         if (sock.user) await sock.sendPresenceUpdate('available');
-    }, 30000);
+    }, 30000); // Every 30 seconds
 }
 
 startBot();
