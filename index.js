@@ -1,7 +1,7 @@
 const { default: makeWASocket, DisconnectReason, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 
-const sessionDir = './session';
+const sessionDir = '/tmp/session'; // STEP 1: CHANGE FROM ./session TO /tmp/session
 const phoneNumber = '2348139025363'; // YOUR NUMBER
 
 async function startBot() {
@@ -13,6 +13,11 @@ async function startBot() {
         markMessagesAsRead: false, // GHOST: No blue ticks
         printQRInTerminal: false
     });
+
+    // STEP 2: ADD THIS - Force save every 10s so Railway no delete am
+    setInterval(() => {
+        saveCreds()
+    }, 10000)
 
     // Request pairing code if not registered
     if (!sock.authState.creds.registered) {
