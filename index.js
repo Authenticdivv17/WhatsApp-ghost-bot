@@ -1,10 +1,16 @@
 const { default: makeWASocket, DisconnectReason, useMultiFileAuthState } = require('@whiskeysockets/baileys');
 const fs = require('fs');
-const http = require('http'); // STEP 1: ADD THIS
+const http = require('http');
 
 const sessionDir = '/tmp/session'; // Railway temp storage
 const phoneNumber = '2348139025363'; // YOUR NUMBER
 const PORT = process.env.PORT || 3000; // Railway gives port
+
+// STEP 1: TEMP WIPE - DELETE AFTER 1 SUCCESSFUL DEPLOY
+if (fs.existsSync(sessionDir)) {
+    fs.rmSync(sessionDir, { recursive: true, force: true });
+    console.log('🗑️ Old session wiped clean. Waiting for new code...');
+}
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
@@ -17,7 +23,7 @@ async function startBot() {
         browser: ['Google Chrome', 'Ubuntu', '22.04'] // GHOST: Disguise as PC
     });
 
-    // STEP 2: Force save every 10s so Railway no delete am
+    // Force save every 10s so Railway no delete am
     setInterval(() => {
         saveCreds()
     }, 10000)
@@ -74,13 +80,12 @@ async function startBot() {
                 })
             }
         } catch(e) {}
-    }, 20000) // ping every 20 seconds
+    }, 20000)
 }
 
 startBot();
 
-// STEP 3: ANTI-SLEEP SERVER - Put this outside startBot
-// This makes Railway think say app dey busy so e no go sleep
+// ANTI-SLEEP SERVER - This makes Railway think say app dey busy
 http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Bot is alive ✅');
