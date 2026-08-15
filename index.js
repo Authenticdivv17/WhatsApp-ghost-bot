@@ -4,12 +4,6 @@ const fs = require('fs');
 const sessionDir = './session';
 const phoneNumber = '2348139025363'; // YOUR NUMBER
 
-// Railway Fix: Auto delete bad session
-if (fs.existsSync(sessionDir)) {
-    fs.rmSync(sessionDir, { recursive: true, force: true });
-    console.log('Old session deleted');
-}
-
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
     
@@ -23,24 +17,31 @@ async function startBot() {
     // Request pairing code if not registered
     if (!sock.authState.creds.registered) {
         setTimeout(async () => {
-            const code = await sock.requestPairingCode(phoneNumber);
-            console.log('\n====================================');
-            console.log('YOUR PAIRING CODE:', code);
-            console.log('Go WhatsApp > Linked devices > Link with phone number');
-            console.log('====================================\n');
+            try {
+                const code = await sock.requestPairingCode(phoneNumber);
+                console.log('\n====================================');
+                console.log('YOUR PAIRING CODE:', code);
+                console.log('Go WhatsApp > Linked devices > Link with phone number');
+                console.log('====================================\n');
+            } catch (err) {
+                console.log('Error getting code:', err);
+            }
         }, 3000);
     }
 
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', async (update) => {
-        const { connection } = update;
+        const { connection, lastDisconnect } = update;
         if (connection === 'open') {
             console.log('✅ SUCCESS! GHOST BOT CONNECTED');
             await sock.sendPresenceUpdate('available');
         } else if (connection === 'close') {
-            console.log('Reconnecting...');
-            setTimeout(startBot, 3000);
+            const shouldReconnect = (lastDisconnect.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+            if (shouldReconnect) {
+                console.log('Reconnecting...');
+                setTimeout(startBot, 3000);
+            }
         }
     });
 
