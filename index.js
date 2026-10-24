@@ -2,16 +2,12 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = requi
 const P = require('pino');
 const http = require('http');
 
-// 1. Create small web server so Render no go kill am
 const PORT = process.env.PORT || 10000;
 http.createServer((req, res) => {
-    res.writeHead(200);
-    res.end("Ghost Bot is Running 👻 - 08139025363");
-}).listen(PORT, '0.0.0.0', () => {
-    console.log(`Server listening on port ${PORT} - Keeping Render alive`);
-});
+    res.end("Ghost Bot Running for 08139025363 👻");
+}).listen(PORT, '0.0.0.0', () => console.log(`Server on ${PORT}`));
 
-let hasRequestedCode = false;
+let pairingRequested = false;
 
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth');
@@ -19,43 +15,40 @@ async function startBot() {
         auth: state,
         logger: P({ level: 'silent' }),
         markOnlineOnConnect: true,
-        browser: ["Ubuntu", "Chrome", "20.0"]
+        browser: ["Ubuntu", "Chrome", "122.0"]
     });
 
     sock.ev.on('creds.update', saveCreds);
 
-    if (!sock.authState.creds.registered && !hasRequestedCode) {
-        hasRequestedCode = true;
-        const cleanNumber = "2348139025363";
-        
-        console.log("Waiting 10 seconds to connect to WhatsApp servers...");
-        await new Promise(r => setTimeout(r, 10000));
-        
-        try {
-            console.log("Requesting pairing code now...");
-            const code = await sock.requestPairingCode(cleanNumber);
-            console.log(`\n========================`);
-            console.log(`PAIRING CODE: ${code}`);
-            console.log(`For: 08139025363`);
-            console.log(`========================\n`);
-        } catch (e) {
-            console.log("Failed, retrying in 10 sec:", e.message);
-            hasRequestedCode = false;
-            setTimeout(startBot, 10000);
-        }
-    }
-
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
+
+        if (!sock.authState.creds.registered && !pairingRequested && connection !== 'close') {
+            // Wait for socket to be stable
+            pairingRequested = true;
+            console.log("Socket stable, waiting 15 sec before code...");
+            await new Promise(r => setTimeout(r, 15000));
+            try {
+                const code = await sock.requestPairingCode("2348139025363");
+                console.log(`\n===== PAIRING CODE FOR 08139025363 =====`);
+                console.log(code);
+                console.log(`========================================\n`);
+            } catch (e) {
+                console.log("Pairing failed:", e.message);
+                pairingRequested = false;
+            }
+        }
+
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Closed, reconnecting...', shouldReconnect);
+            console.log('Connection closed, reconnect:', shouldReconnect);
             if (shouldReconnect) {
-                if(!sock.authState.creds.registered) hasRequestedCode = false;
+                if (!sock.authState.creds.registered) pairingRequested = false;
                 setTimeout(startBot, 5000);
             }
-        } else if (connection === 'open') {
-            console.log('✅ Ghost Bot CONNECTED for 08139025363 👻');
+        }
+        if (connection === 'open') {
+            console.log('✅ CONNECTED - 08139025363 Ghost Online 👻');
         }
     });
 }
