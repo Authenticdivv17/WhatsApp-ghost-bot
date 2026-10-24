@@ -7,9 +7,9 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.17",
+    "@whiskeysockets/baileys": "^6.7.18",
     "pino": "^8.17.0",
-    "qrcode-terminal": "^0.12.0"
+    "ws": "^8.18.0"
   },
   "engines": {
     "node": ">=20.0.0"
