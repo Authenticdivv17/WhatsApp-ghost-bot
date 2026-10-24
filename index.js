@@ -1,40 +1,50 @@
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
 const P = require('pino');
 
+let hasRequestedCode = false;
+
 async function startBot() {
     const { state, saveCreds } = await useMultiFileAuthState('auth');
     const sock = makeWASocket({
         auth: state,
         logger: P({ level: 'silent' }),
-        markOnlineOnConnect: true, // GHOST - Always Online
-        printQRInTerminal: true,
-        browser: ["Ghost Bot", "Chrome", "1.0"]
+        markOnlineOnConnect: true,
+        browser: ["Ubuntu", "Chrome", "20.0"]
     });
 
-    // THIS IS THE CONNECTION PART
-    if (!sock.authState.creds.registered) {
-        const phoneNumber = "2348139025363"; // <-- PUT YOUR WHATSAPP NUMBER HERE WITH COUNTRY CODE
-        console.log("Requesting pairing code for:", phoneNumber);
-        setTimeout(async () => {
-            try {
-                const code = await sock.requestPairingCode(phoneNumber);
-                console.log("YOUR GHOST BOT PAIRING CODE IS: " + code);
-                console.log("Go to WhatsApp > Linked Devices > Link with phone number > enter this code");
-            } catch (e) {
-                console.log("Error getting pairing code:", e);
-            }
-        }, 3000);
-    }
-
     sock.ev.on('creds.update', saveCreds);
+
+    if (!sock.authState.creds.registered && !hasRequestedCode) {
+        hasRequestedCode = true;
+        const phoneNumber = "2348139025363"; // Your number fixed
+        
+        const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
+        
+        console.log("Waiting 5 seconds before requesting code...");
+        await new Promise(r => setTimeout(r, 5000));
+        
+        try {
+            const code = await sock.requestPairingCode(cleanNumber);
+            console.log(`\n\n========================`);
+            console.log(`PAIRING CODE FOR 08139025363: ${code}`);
+            console.log(`========================\n\n`);
+        } catch (e) {
+            console.log("Failed to get code:", e.message);
+            hasRequestedCode = false;
+        }
+    }
 
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect } = update;
         if (connection === 'close') {
             const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) startBot();
+            console.log('Connection closed, reconnecting:', shouldReconnect);
+            if (shouldReconnect) {
+                if (!sock.authState.creds.registered) hasRequestedCode = false;
+                setTimeout(startBot, 5000);
+            }
         } else if (connection === 'open') {
-            console.log('Ghost Bot CONNECTED 👻 - Always Online Active!');
+            console.log('✅ Ghost Bot CONNECTED for 08139025363 - Always Online Active 👻');
         }
     });
 }
