@@ -1,39 +1,42 @@
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const P = require('pino');
 
-    const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys")
-const P = require("pino")
-const express = require("express")
-const app = express()
-
-// Fake server so Render no go kill am
-app.get("/", (req,res)=> res.send("Ghost Invisible is Running 👻"))
-app.listen(process.env.PORT || 3000)
-
-async function start() {
-    const { state, saveCreds } = await useMultiFileAuthState('auth')
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('auth');
     const sock = makeWASocket({
-        logger: P({ level: "silent" }),
         auth: state,
-        markOnlineOnConnect: false,
-        printQRInTerminal: false
-    })
+        logger: P({ level: 'silent' }),
+        markOnlineOnConnect: true, // GHOST - Always Online
+        printQRInTerminal: true,
+        browser: ["Ghost Bot", "Chrome", "1.0"]
+    });
 
-    // USE PAIRING CODE - better for Render
+    // THIS IS THE CONNECTION PART
     if (!sock.authState.creds.registered) {
-        let phone = "234XXXXXXXXXX" // <--- PUT YOUR NUMBER HERE WITH 234, e.g 2348101234567
+        const phoneNumber = "2348139025363"; // <-- PUT YOUR WHATSAPP NUMBER HERE WITH COUNTRY CODE
+        console.log("Requesting pairing code for:", phoneNumber);
         setTimeout(async () => {
-            let code = await sock.requestPairingCode(phone)
-            console.log("YOUR PAIRING CODE IS: " + code)
-        }, 3000)
+            try {
+                const code = await sock.requestPairingCode(phoneNumber);
+                console.log("YOUR GHOST BOT PAIRING CODE IS: " + code);
+                console.log("Go to WhatsApp > Linked Devices > Link with phone number > enter this code");
+            } catch (e) {
+                console.log("Error getting pairing code:", e);
+            }
+        }, 3000);
     }
 
-    sock.ev.on('creds.update', saveCreds)
-    setInterval(()=> {
-        try{ sock.sendPresenceUpdate('unavailable') }catch{}
-    }, 5000)
+    sock.ev.on('creds.update', saveCreds);
 
-    sock.ev.on('connection.update', ({connection}) => {
-        if(connection==='open') console.log("✅ INVISIBLE ACTIVE - Deploy succeeded")
-        if(connection==='close') start()
-    })
+    sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === 'close') {
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            if (shouldReconnect) startBot();
+        } else if (connection === 'open') {
+            console.log('Ghost Bot CONNECTED 👻 - Always Online Active!');
+        }
+    });
 }
-start()
+
+startBot();
